@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trợ Lý Di Động AI Vision</title>
+    <style>
+        /* CSS tối ưu giao diện hiển thị mượt mà trên điện thoại di động */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #f0f2f5;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 450px; /* Khóa khung theo kích thước màn hình điện thoại */
+            background: #ffffff;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        h2 {
+            text-align: center;
+            color: #1a73e8;
+            margin-bottom: 20px;
+            font-size: 1.4rem;
+        }
+
+        /* Vùng hiển thị ảnh xem trước khi chụp */
+        .preview-container {
+            width: 100%;
+            height: 250px;
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            background: #fafafa;
+            margin-bottom: 20px;
+        }
+
+        .preview-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: none;
+        }
+
+        .preview-placeholder {
+            color: #777;
+            text-align: center;
+            font-size: 0.9rem;
+        }
+
+        /* Nút bấm thiết kế to, dễ chạm bằng ngón tay trên mobile */
+        .btn-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* Giấu nút input mặc định đi để làm nút bấm đẹp hơn */
+        input[type="file"] {
+            display: none;
+        }
+
+        .custom-file-upload, .btn-scan {
+            display: block;
+            width: 100%;
+            padding: 14px;
+            text-align: center;
+            background-color: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .custom-file-upload {
+            background-color: #34a853; /* Màu xanh lá cho nút chụp ảnh */
+        }
+
+        .btn-scan {
+            background-color: #1a73e8; /* Màu xanh dương cho nút phân tích */
+        }
+
+        .btn-scan:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        /* Khu vực hiển thị kết quả trả về từ Cloud AI */
+        .result-container {
+            margin-top: 25px;
+            border-top: 1px solid #eee;
+            padding-top: 15px;
+        }
+
+        .result-title {
+            font-weight: bold;
+            color: #1a73e8;
+            margin-bottom: 10px;
+        }
+
+        #resultText {
+            font-size: 0.95rem;
+            line-height: 1.5;
+            white-space: pre-wrap; /* Giữ nguyên các hàng xuống dòng từ AI */
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #e8eaed;
+            min-height: 100px;
+        }
+
+        .loading {
+            color: #efa913;
+            font-weight: bold;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Trợ Lý Di Động AI Vision</h2>
+    
+    <!-- Vùng hiển thị ảnh chụp -->
+    <div class="preview-container" id="previewContainer">
+        <span class="preview-placeholder" id="placeholderText">Chưa có ảnh được chọn.<br>Hãy bấm nút bên dưới để chụp ảnh.</span>
+        <img id="imagePreview" src="" alt="Ảnh xem trước">
+    </div>
+
+    <!-- Khu vực các nút tương tác -->
+    <div class="btn-group">
+        <!-- Thuộc tính capture="camera" ép trình duyệt di động kích hoạt Camera khi bấm vào -->
+        <label class="custom-file-upload">
+            <input type="file" id="imageInput" accept="image/*" capture="camera" onchange="previewImage(event)">
+            Chụp Ảnh / Chọn Ảnh
+        </label>
+        
+        <button class="btn-scan" id="scanBtn" onclick="analyzeImage()" disabled> Bắt Đầu Phân Tích</button>
+    </div>
+
+    <!-- Kết quả xử lý từ đám mây -->
+    <div class="result-container">
+        <div class="result-title">Phản hồi từ Đám mây (Gemini API):</div>
+        <div id="resultText">Kết quả phân tích hình ảnh của bạn sẽ hiển thị tại đây...</div>
+    </div>
+</div>
+
+<!-- Tải thư viện Javascript SDK của Google Gemini qua mạng (CDN) -->
+<script type="importmap">
+  {
+    "imports": {
+      "@google/generative-ai": "https://esm.run/@google/generative-ai"
+    }
+  }
+</script>
+
+<script>
+    const API_KEY = "";
+
+    window.previewImage = function(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = document.getElementById('imagePreview');
+                img.src = e.target.result;
+                img.style.display = 'block';
+                document.getElementById('placeholderText').style.display = 'none';
+                document.getElementById('scanBtn').disabled = false;
+            }
+            reader.readAsDataURL(file);
+        }
+    }
+
+    window.analyzeImage = async function() {
+        const fileInput = document.getElementById('imageInput');
+        const file = fileInput.files[0];
+        const resultText = document.getElementById('resultText');
+        const scanBtn = document.getElementById('scanBtn');
+
+        if (!file) return;
+
+        resultText.innerHTML = '<div class="loading">⏳ Đang gửi dữ liệu ảnh lên đám mây và chờ xử lý...</div>';
+        scanBtn.disabled = true;
+
+        try {
+            const base64 = await new Promise((res) => {
+                const r = new FileReader();
+                r.onloadend = () => res(r.result.split(',')[1]);
+                r.readAsDataURL(file);
+            });
+
+            const resp = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [
+                                { text: "Bạn là một trợ lý điện toán di động thông minh. Hãy nhận diện và phân tích chi tiết xem vật thể/bối cảnh trong bức ảnh này là gì, cung cấp các thông tin hữu ích liên quan một cách ngắn gọn." },
+                                { inline_data: { mime_type: file.type, data: base64 } }
+                            ]
+                        }]
+                    })
+                }
+            );
+
+            const data = await resp.json();
+            if (data.error) throw new Error(data.error.message);
+            resultText.innerText = data.candidates[0].content.parts[0].text;
+
+        } catch (error) {
+            console.error(error);
+            resultText.innerText = "❌ Đã có lỗi xảy ra: " + error.message;
+        } finally {
+            scanBtn.disabled = false;
+        }
+    }
+</script>
+
+</body>
+</html>
